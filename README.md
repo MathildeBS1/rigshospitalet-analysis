@@ -9,6 +9,7 @@
 ## How-to guides
 
 **Load data in a notebook:**
+
 ```python
 import sys; sys.path.insert(0, "src")
 from data.loader import load_completed, load_cancelled
