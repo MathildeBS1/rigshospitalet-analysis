@@ -1,5 +1,5 @@
 # Data files
-data/
+/data/
 *.csv
 
 # Python cache and bytecode
