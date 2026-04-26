@@ -16,6 +16,7 @@ Two CSV files in `data/`:
 The data covers **2 years: 2024-01-01 to 2025-12-31**, across **32 surgical specialties** and **129 OR rooms**.
 
 Load it with:
+
 ```python
 import sys
 sys.path.insert(0, 'src')
@@ -111,6 +112,29 @@ duration_gap     = actual_inor_min - planned_inor_min
 
 The mean looks small, but it's an average — some cases are fine, others run wildly over. The p90 gap is +44 min.
 
+### Are the two failures related?
+
+A natural question: is Failure 2 caused by Failure 1? If a case starts late, does the surgery end up running over its planned duration because of the knock-on pressure?
+
+No. We checked:
+
+```python
+# Group cases by how late they started, compare duration gap within each group
+corr(start_delay_min, duration_gap_min)  # r = -0.01
+```
+
+| Start delay bucket | % running over planned duration | Mean duration gap |
+|---|---|---|
+| On time or early | 50.1% | +4.9 min |
+| 1–15 min late | 50.3% | +5.0 min |
+| 16–30 min late | 52.2% | +4.2 min |
+| 31–60 min late | 59.9% | +3.5 min |
+| 60+ min late | 60.5% | +3.4 min |
+
+Cases that start on time still run over 50% of the time — almost the same rate as cases starting an hour late. The correlation between start delay and duration gap is r = −0.01, effectively zero.
+
+**These are two independent failures.** The duration estimate is broken regardless of when the case starts. That means Rigshospitalet has two separate problems to fix, not just one root cause.
+
 ### The combined effect
 
 Both problems stack:
@@ -118,7 +142,7 @@ Both problems stack:
 | Metric | Value |
 |---|---|
 | % of OR rooms finishing after planned time | **68.0%** |
-| Mean OR room overrun | **+25.0 min** |
+| Mean OR room overrun | **+25.7 min** |
 
 ### What the actual in-OR time looks like
 
