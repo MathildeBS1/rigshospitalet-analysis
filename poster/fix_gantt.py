@@ -1,5 +1,8 @@
 """Panel 3: Before/after Gantt — same OR day, current vs lookup schedule."""
 
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
+
 import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -32,6 +35,8 @@ df = df.with_columns([
      .dt.total_seconds() / 60).alias("w2_min"),
     ((pl.col("ts_procedure_end") - pl.col("ts_procedure_start"))
      .dt.total_seconds() / 60).alias("surgery_dur_min"),
+    ((pl.col("ts_procedure_end") - pl.col("ts_patient_leaves_or_planned"))
+     .dt.total_seconds() / 60).alias("overrun_min"),
     pl.col("ts_anesthesia_start").is_not_null().alias("has_anesthesia"),
 ])
 
@@ -45,24 +50,23 @@ lookup = w2_filt.group_by(["specialty", "has_anesthesia"]).agg(
     pl.col("w2_min").mean().alias("lookup_prep")
 )
 
-# --- Find a good OR day ---
+# --- Find OR day: overrun present, and fix prep fits in gap between cases ---
 candidates = (
     df.filter(
         pl.col("planned_prep_min").is_not_null()
         & (pl.col("planned_prep_min") == 0)
         & pl.col("start_delay_min").is_not_null()
-        & (pl.col("start_delay_min").is_between(15, 90))
         & pl.col("w2_min").is_not_null()
         & pl.col("surgery_dur_min").is_not_null()
         & (pl.col("surgery_dur_min").is_between(20, 180))
+        & pl.col("overrun_min").is_not_null()
+        & (pl.col("overrun_min").is_between(10, 90))
         & pl.col("specialty").is_not_null()
         & pl.col("ts_procedure_end").is_not_null()
         & (pl.col("ts_patient_in_or_planned").dt.hour().is_between(7, 16))
     )
     .join(lookup, on=["specialty", "has_anesthesia"])
-    .with_columns(
-        (pl.col("start_delay_min") - pl.col("lookup_prep")).alias("new_delay")
-    )
+    .filter(pl.col("lookup_prep") > 20)
 )
 
 or_days = (
@@ -70,21 +74,15 @@ or_days = (
     .group_by(["or_room", "date"])
     .agg([
         pl.len().alias("n_cases"),
-        pl.col("start_delay_min").mean().alias("mean_old_delay"),
-        pl.col("new_delay").mean().alias("mean_new_delay"),
-        pl.col("new_delay").abs().mean().alias("mean_abs_new_delay"),
-        (pl.col("new_delay").abs() < 15).sum().alias("n_good_fix"),
+        pl.col("start_delay_min").mean().alias("mean_start_delay"),
+        pl.col("overrun_min").mean().alias("mean_overrun"),
     ])
     .filter(
         (pl.col("n_cases").is_between(3, 4))
-        & (pl.col("n_good_fix") >= 3)
-        & (pl.col("mean_old_delay") > 30)
-        & (pl.col("mean_abs_new_delay") < 12)
+        & (pl.col("mean_overrun") > 15)
+        & (pl.col("mean_overrun") < 90)
     )
-    .with_columns(
-        (pl.col("mean_old_delay") - pl.col("mean_abs_new_delay")).alias("score")
-    )
-    .sort("score", descending=True)
+    .sort("mean_overrun", descending=True)
 )
 
 best_room, best_date = None, None
@@ -100,21 +98,23 @@ for day in or_days.iter_rows(named=True):
     )
     day_rows = day_cases.to_dicts()
 
-    has_overlap = False
+    # Constraint: allocated prep for case k+1 must not start before
+    # the allocated end of case k (planned_end[k] + lookup_prep[k])
+    feasible = True
     for k in range(len(day_rows) - 1):
         gap = (day_rows[k + 1]["ts_patient_in_or_planned"]
                - day_rows[k]["ts_patient_leaves_or_planned"]).total_seconds() / 60
         if gap < day_rows[k]["lookup_prep"]:
-            has_overlap = True
+            feasible = False
             break
 
-    if not has_overlap:
+    if feasible:
         best_room, best_date = day["or_room"], day["date"]
         cases = day_cases
         break
 
 if best_room is None:
-    raise RuntimeError("No OR day found without fix-panel overlap")
+    raise RuntimeError("No feasible OR day found")
 
 rows = cases.to_dicts()
 n_cases = len(rows)
@@ -205,7 +205,6 @@ for panel_idx, (ax, title) in enumerate(zip(axes, [
         real_in = to_min(c["ts_patient_in_or"])
         proc_start = to_min(c["ts_procedure_start"])
         proc_end = to_min(c["ts_procedure_end"])
-        delay = c["start_delay_min"]
         lkp = c["lookup_prep"]
 
         y_plan = y + gap + bar_h / 2
@@ -236,42 +235,34 @@ for panel_idx, (ax, title) in enumerate(zip(axes, [
         # Save brace positions for after limits are set
         brace_info.append((i, y, y_plan + bar_h / 2, y_real - bar_h / 2))
 
-        # --- Delay annotation ---
+        # --- Overrun annotation: planned finish vs actual finish ---
         tick_h = 0.03
         if is_fix:
-            new_delay = delay - lkp
-            new_ref = plan_start + lkp
-            if abs(new_delay) < 3:
-                ax.text(new_ref, y + bar_h + gap + 0.20,
-                        "on time", ha="center", va="bottom",
-                        fontsize=10, fontweight="bold", color=TEAL)
-            else:
-                sign = "+" if new_delay > 0 else ""
-                col = RED if new_delay > 10 else TEAL
-                left_pt = min(new_ref, real_in)
-                right_pt = max(new_ref, real_in)
-                mid = (left_pt + right_pt) / 2
-                ax.plot([left_pt, right_pt], [y, y],
-                        color=col, lw=1.5, zorder=4)
-                ax.plot([left_pt, left_pt], [y - tick_h, y + tick_h],
-                        color=col, lw=1.5, zorder=4)
-                ax.plot([right_pt, right_pt], [y - tick_h, y + tick_h],
-                        color=col, lw=1.5, zorder=4)
-                ax.text(mid, y + bar_h + gap + 0.20,
-                        f"{sign}{new_delay:.0f} min",
-                        ha="center", va="bottom",
-                        fontsize=10, fontweight="bold", color=col)
+            ref_end = plan_end + lkp       # new planned end accounts for prep
+            overrun = proc_end - ref_end
         else:
-            mid = (plan_start + real_in) / 2
-            col = RED
-            ax.plot([plan_start, real_in], [y, y],
+            ref_end = plan_end             # current planned end
+            overrun = c["overrun_min"]
+
+        left_pt = min(ref_end, proc_end)
+        right_pt = max(ref_end, proc_end)
+        mid = (left_pt + right_pt) / 2
+
+        if abs(overrun) < 3:
+            ax.text(mid, y + bar_h + gap + 0.20,
+                    "on time", ha="center", va="bottom",
+                    fontsize=10, fontweight="bold", color=TEAL)
+        else:
+            sign = "+" if overrun > 0 else ""
+            col = RED if overrun > 0 else TEAL
+            ax.plot([left_pt, right_pt], [y, y],
                     color=col, lw=1.5, zorder=4)
-            ax.plot([plan_start, plan_start], [y - tick_h, y + tick_h],
+            ax.plot([left_pt, left_pt], [y - tick_h, y + tick_h],
                     color=col, lw=1.5, zorder=4)
-            ax.plot([real_in, real_in], [y - tick_h, y + tick_h],
+            ax.plot([right_pt, right_pt], [y - tick_h, y + tick_h],
                     color=col, lw=1.5, zorder=4)
             ax.text(mid, y + bar_h + gap + 0.20,
-                    f"+{delay:.0f} min",
+                    f"{sign}{overrun:.0f} min",
                     ha="center", va="bottom",
                     fontsize=10, fontweight="bold", color=col)
 
@@ -317,7 +308,7 @@ legend_elements = [
                    label="Actual surgery"),
     mlines.Line2D([0, 1], [0, 0], color=GRAY_TEXT, linewidth=1.5,
                   marker="|", markersize=8, markeredgewidth=1.5,
-                  label="Start delay"),
+                  label="Overrun"),
 ]
 fig.legend(handles=legend_elements, loc="lower center", ncol=5, fontsize=10,
            frameon=False, bbox_to_anchor=(0.5, -0.01))
@@ -327,6 +318,9 @@ plt.close()
 print(f"Saved → {OUT}")
 print(f"OR day: {best_room}, {best_date}")
 for i, c in enumerate(rows):
-    nd = c["start_delay_min"] - c["lookup_prep"]
-    print(f"  Case {i+1}: delay {c['start_delay_min']:.0f} → {nd:.0f} min "
-          f"(lookup={c['lookup_prep']:.0f}, specialty={c['specialty']})")
+    lkp = c["lookup_prep"]
+    overrun = c["overrun_min"]
+    new_overrun = overrun - lkp
+    print(f"  Case {i+1}: start_delay={c['start_delay_min']:.0f} min, "
+          f"overrun {overrun:.0f} → {new_overrun:.0f} min "
+          f"(lookup={lkp:.0f}, specialty={c['specialty']})")
