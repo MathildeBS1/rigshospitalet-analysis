@@ -130,7 +130,7 @@ Central datafication questions the examiners may ask:
 > "Addresses the distribution of power and power relations in the Big Data Society."
 - Key questions: *Whose interests are prioritized? Who is empowered? Who is disempowered?*
 - Data interest analysis: **micro** (design), **meso** (organization), **macro** (culture, geopolitics)
-- **Your case:** Who benefits from the current zero-prep scheduling? The system is easier to manage if you never allocate prep time — schedulers face no constraint. Who is harmed? Patients (late surgeries), OR staff (working against an impossible plan), hospital management (delay metric "73% late" is noise, not signal).
+- **Your case:** Who benefits from the current zero-prep scheduling? The system is easier to manage if you never allocate prep time — schedulers face no constraint. Who is harmed? Patients (surgery overruns cascade into their day), OR staff (working against an impossible plan), hospital management (the overrun metric "55% of cases overrun" is dominated by a planning error, not operational failure — making it noise rather than signal).
 
 **Data governance models (Micheli et al., 2020)**
 | Model | Who controls | Goal |
@@ -250,13 +250,13 @@ A: Using the data interest analysis framework (Hasselbalch, micro/meso/macro):
 
 ### On the simulation/impact claim
 
-**Q: Your poster says "41,400 fewer late starts." That seems like a very strong claim. Is it justified?**
+**Q: Your poster says "~20,600 fewer overruns." That seems like a very strong claim. Is it justified?**
 
-A: It is a *counterfactual simulation*, which is the standard methodology in OR scheduling research (Dexter & Macario). It holds actual events fixed and recomputes the hospital's own delay metric (Forsinkelse) under the new allocation. The "41,400" means those cases would flip from "late" to "on time" in the metric — not that patients would arrive earlier. The actual OR events are unchanged: same patients, same procedure durations. The metric improves because the plan becomes more realistic.
+A: It is a *counterfactual simulation*, the standard methodology in OR scheduling research (Dexter & Macario). It holds actual events fixed — same patients, same procedure durations — and recomputes the overrun metric under the new prep allocation. The "~20,600" means those cases would flip from "overrun" to "on time" purely because the plan now accounts for prep time. Mean overrun shifts from +9.5 min to −19.5 min; the overrun rate drops from 55% to 38%.
 
-This distinction matters. We are making the *schedule tell the truth*, not changing what happens in the OR. The causal mechanism (does fixing the plan also fix actual delays?) would require a before/after study — which we recommend as a follow-up.
+The key distinction: we are making the *schedule tell the truth*, not changing what physically happens in the OR. A surgery that currently takes 90 min still takes 90 min — but if the schedule now allocates 30 min of prep before it, what was a 30-min overrun becomes on time. The causal question (does a better plan lead to fewer *actual* overruns through behaviour change?) would require a before/after study — which we recommend as a follow-up.
 
-In course terms (Shapin & Schaffer): "numbers rarely speak for themselves." The 41,400 number needs this story to be honest.
+In course terms (Shapin & Schaffer): "numbers rarely speak for themselves." The 20,600 number needs this story to be honest.
 
 ---
 
@@ -285,7 +285,7 @@ A: We had contact with the analytics team (Maja, Maia, Majken, Jeanette) who def
 A: Three reasons, all grounded in course concepts:
 1. *Organizational fit*: The hospital has no ML infrastructure. Building and maintaining a model requires resources they don't have today. A table requires none. This is data as *practice* (Xu et al., 2024) — embedding in repeatable processes.
 2. *Trust and affordance*: A head nurse can verify "anesthesia cases in my specialty average 44 min" against her experience. She cannot verify "the model says 47.3 min." For adoption, the tool must *afford trust* (Winthereik's affordance framework).
-3. *Marginal gain vs. adoption cost*: The lookup table already flips mean delay from +21 to −8 min. The additional gain from ML is smaller than the organizational cost of implementing it. The course principle: value requires *fit* with context (Datafication lecture).
+3. *Marginal gain vs. adoption cost*: The lookup table already flips mean overrun from +9.5 to −19.5 min and cuts the overrun rate from 55% to 38%. The additional gain from ML is smaller than the organizational cost of implementing it. The course principle: value requires *fit* with context (Datafication lecture).
 
 ML is positioned as a *future refinement*, not a rejection.
 
@@ -319,38 +319,54 @@ ML is positioned as a *future refinement*, not a rejection.
 | 80.9% zero planned prep | Datafication: structuring choices shape what is measurable | L4 |
 | 63.5% simultaneous clicks | Invisible work, resistance/subversion, datafication production failures | L2, L9 |
 | Lookup table recommendation over ML | Affordance (trust), data as practice, value requires fit | L2, L3, L4 |
-| Simulation = "metric fix" | "Numbers rarely speak for themselves"; ethical storytelling | L1, L11 |
-| Data quality recommendation | Datafication: production-level change needed | L4 |
-| Staff starting room prep early | Organizational co-production, invisible compensating work | L2 |
+| Simulation = "metric fix" (overrun, not actual events) | "Numbers rarely speak for themselves"; ethical storytelling | L1, L11 |
+| Data quality note on poster | Datafication: production-level change needed | L4 |
+| Zero-prep → +14.9 min overrun; prep allocated → finishes early | Datafication consequences; socio-technical problem framing | L2, L4 |
 | Rigshospitalet org structure (90% clinical mgmt) | Organizational fabric, power structures | L2, L7 |
-| "Planning failure not performance failure" | Socio-technical problem framing | L2 |
-| 41,400 late starts eliminated | Simulation/synthetic representation (5th affordance of IT) | L2 |
+| ~20,600 fewer overruns | Simulation/synthetic representation (5th affordance of IT) | L2 |
 | Why the fix won't guarantee actual improvement | "Technical fixes won't save bad company performance" | L2 |
+| Overrun cascades through OR day | Co-production: scheduling norms and actual OR performance co-evolve | L2 |
 
 ---
 
 ## PART 6: NUMBERS TO KNOW COLD
 
+### The problem
 | Metric | Value |
 |---|---|
-| Zero planned prep | **80.9%** of cases (97,507 / 120,474) |
-| Mean start delay, zero-prep | **+26.7 min** |
-| % starting late, zero-prep | **81.5%** |
-| Mean start delay, any planned prep | **−3.3 min** (early) |
-| Mean start delay, 20+ min planned | **−8.9 min** (early) |
+| Total cases | **120,868** across **32** specialties, **129** OR rooms, **2024–2025** |
+| Zero planned prep | **81%** of cases |
+| Mean overrun, zero-prep cases | **+14.9 min** |
+| Mean overrun, 1–10 min prep allocated | **−13.9 min** (finishes early) |
+| Mean overrun, 11–20 min prep allocated | **−13.5 min** (finishes early) |
+| Mean overrun, 20+ min prep allocated | **−10.7 min** (finishes early) |
+| Mean overrun, all cases currently | **+9.5 min** |
+| % of cases currently overrunning | **55%** |
+
+### The fix
+| Metric | Value |
+|---|---|
 | Room prep simultaneous-click rate | **63.5%** → only 32.5% usable |
-| W2 mean (patient prep) | **32 min** overall |
 | W2 with anesthesia | **44 min** (n=75,033) |
 | W2 without anesthesia | **12 min** (n=44,929) |
-| Lookup table R² | **0.576** (64 groups) |
-| ML model R² | **0.699** (gradient boosting) |
-| Simulated mean delay with lookup | **−7.9 min** (from +21.0) |
-| Simulated % late with lookup | **38.5%** (from 73.1%) |
-| Late starts eliminated | **~41,400** |
-| Total cases | **120,868** |
-| Date range | **2024–2025** |
-| Specialties | **32** |
-| OR rooms | **129** |
+| Lookup table R² | **0.576** (64-cell: specialty × anesthesia) |
+| ML model R² | **0.699** (gradient boosting, 6 features) |
+
+### The impact (counterfactual simulation)
+| Metric | Current | With lookup |
+|---|---|---|
+| Mean overrun | **+9.5 min** | **−19.5 min** |
+| % overrunning | **55%** | **38%** |
+| Fewer overruns | — | **~20,600** |
+
+### Specialty examples from the heatmap (no anesthesia / with anesthesia)
+| Specialty | No anesthesia | With anesthesia |
+|---|---|---|
+| Arthroplasty | 12 min | **80 min** |
+| Ophthalmology | 8 min | 32 min |
+| Breast surgery | 44 min | 65 min |
+| Tumor orthopedics | 24 min | 65 min |
+| Urology | 28 min | 49 min |
 
 ---
 
